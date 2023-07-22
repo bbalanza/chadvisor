@@ -15,7 +15,7 @@ const CONNECTION_TYPE string = "tcp"
 func loadEnv() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Panicln("Error loading .env file.")
+		log.Panic("Error loading .env file.")
 		log.Panic(err)
 	}
 }
@@ -23,6 +23,25 @@ func loadEnv() {
 func main() {
 
 	loadEnv()
-  client := twitch.NewClient(os.Getenv(""))
+	client := twitch.NewClient(os.Getenv("NICK"), "oauth:"+os.Getenv("ACCESS_TOKEN"))
+
+	client.Join("projared")
+
+	client.OnConnect(func() {
+		fmt.Println("Connected.")
+	})
+
+  client.OnSelfJoinMessage(func(message twitch.UserJoinMessage){
+    fmt.Println("Chatbot Joined!")
+  })
+
+	client.OnPrivateMessage(func(message twitch.PrivateMessage) {
+		fmt.Println(message.User.Name + ": " + message.Message)
+	})
+
+	err := client.Connect()
+	if err != nil {
+		log.Panicln(err)
+	}
 
 }
