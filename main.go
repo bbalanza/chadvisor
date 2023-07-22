@@ -1,18 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-  "io"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
-  "bytes"
+	"time"
+
 	godotenv "github.com/joho/godotenv"
 )
 
-const ADDRESS string = "irc.chat.twitch.tv:6697"
+const ADDRESS string = "irc.chat.twitch.tv:6667"
 const CONNECTION_TYPE string = "tcp"
 
 type Bot struct {
@@ -28,17 +30,20 @@ type Credentials struct {
 func (bot *Bot) Init(connType string, addr string) {
 	bot.GetCredentials()
 	bot.Connect(connType, addr)
+	bot.SetCapabilities()
 	bot.Authenticate()
 }
 
-func (bot Bot) SendMessage(messages ...string) error {
-	m := ""
-	for _, k := range messages {
-		m += k + " "
+func (bot Bot) SetCapabilities() {
+
+	err := bot.SendMessage("CAP", "REQ", ":twitch.tv/commands twitch.tv/membership")
+	if err != nil {
+		log.Panicln(err)
 	}
+}
 
-	fmt.Println(m)
-
+func (bot Bot) SendMessage(messages ...string) error {
+	m := strings.Join(messages, " ")
 	_, err := fmt.Fprintf(bot.conn, "%s\r\n", m)
 	if err != nil {
 		log.Println("Could not write to wire, check your connection plz.")
@@ -52,12 +57,13 @@ func (bot *Bot) Connect(connType string, addr string) {
 	if err != nil {
 		log.Panic(err)
 	}
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
 	bot.conn = conn
 	return
 }
 
 func (bot Bot) Disconnect() {
-	err := bot.SendMessage("QUIT", "Bye")
+	err := bot.conn.Close()
 	if err != nil {
 		log.Panicln("Could not disconnect")
 		log.Panic(err)
@@ -115,6 +121,18 @@ func (bot Bot) Authenticate() {
 
 }
 
+func (bot Bot) ReadResponses() {
+	connReader := bufio.NewReader(bot.conn)
+	message := ""
+	go func() {
+		for {
+			message, _ = connReader.ReadString('\n')
+			fmt.Print(message)
+			time.Sleep(1 * time.Second)
+		}
+	}()
+}
+
 func main() {
 
 	c := make(chan os.Signal, 1)
@@ -129,9 +147,9 @@ func main() {
 	}()
 
 	bot.Init(CONNECTION_TYPE, ADDRESS)
+	bot.ReadResponses()
 
-	var buf bytes.Buffer
-	io.Copy(&buf, bot.conn)
-	fmt.Println("total size:", buf.Len())
-
+  for {
+    
+  }
 }
