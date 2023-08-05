@@ -10,7 +10,6 @@ import (
 
 	twitch "github.com/gempir/go-twitch-irc/v4"
 	godotenv "github.com/joho/godotenv"
-	openai "github.com/sashabaranov/go-openai"
 )
 
 const ADDRESS string = "irc.chat.twitch.tv:6667"
