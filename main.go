@@ -10,6 +10,7 @@ import (
 
 	twitch "github.com/gempir/go-twitch-irc/v4"
 	godotenv "github.com/joho/godotenv"
+  openai "github.com/sashabaranov/go-openai"
 )
 
 const ADDRESS string = "irc.chat.twitch.tv:6667"
@@ -45,16 +46,19 @@ func setupClient(c *twitch.Client, chat *[]string) {
 
 }
 
+
+
 func main() {
 
 	loadEnv()
 
 	var (
 		twitchClient = twitch.NewClient(os.Getenv("NICK"), "oauth:"+os.Getenv("ACCESS_TOKEN"))
-		chat         = make([]string, 0, CHAT_HISTORY_CAPACITY)
-		sigs         = make(chan os.Signal, 1)
-		ticker       = time.NewTicker(5 * time.Second)
-		done         = make(chan int, 1)
+    openAIClient = openai.NewClient(os.Getenv("OPEN_AI_TOKEN"))
+		chat   = make([]string, 0, CHAT_HISTORY_CAPACITY)
+		sigs   = make(chan os.Signal, 1)
+		ticker = time.NewTicker(5 * time.Second)
+		done   = make(chan int, 1)
 	)
 
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
