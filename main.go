@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -26,7 +28,7 @@ func loadEnv() {
 	}
 }
 
-func setupClient(c *twitch.Client, chat *chat) {
+func setupTwitchClient(c *twitch.Client, chat *chat) {
 
 	c.OnConnect(func() {
 		fmt.Println("Connected...")
@@ -46,33 +48,50 @@ type chat struct {
 	ch chan twitch.PrivateMessage
 }
 
+func newChatCompletionRequest() openai.ChatCompletionRequest {
+	return openai.ChatCompletionRequest{
+		Model: openai.GPT3Dot5Turbo,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role:    openai.ChatMessageRoleSystem,
+        Content: "You are a Twitch chat. You receive messages and summarize them in prose as if they were your thoughts. Refrain to say they are from viewers, remember these messages are supposed to be your thoughts. Summarize them in two sentences. For example: @CohhCarnage you didn't introduce yourself in the front, you are a tresspasser enemy You hit that guy over and over and he still maintained 6 hp lol gnome ran because he was prisoner cohhStare cohhLoot cohhDerp pots? Oh for sure @mogel78 probably basic story hrs no exploring did he solve the puzzle on the second floor? @Goski11 Haha yep, insanely good game though, played through it 3 times and DOS1 2 times and absolutely loved it each time Cohh do not fight them @toajish first I thought he wanted to say something about Fortran Kappa @PSfanatic What all I said it was a shitty game. Then you attack me by calling me a child LMAO I feel like I missed this area Stay mad nerds attacks mods nope sneak in @impulsecfc @impulsecfc cohhHi Welcome to the channel! cohhGV Enjoy your stay cohhL @gokubytes dansgaming isn’t half the distance of cohh but he has the same amount of time sneak around cohh, is there a reason youre ignoring the advice of the narrator? modCheck walking in that room progresses stuff @fortntiemaster_ lol look whos talking this game has a beutifull enviorment avoided cutscene zone EZ sneak around them cohhHmm its an event You can enter thru the front you can talk to them different doorway go from the front sneak around yes yes @fortntiemaster_ No, I attacked you jumping on someone for their spelling when its clear you struggle with it yourself, try to follow along @CohhCarnage please explore ooutside untill you find a monk's grave you'll thank me later I failed the skill check to open the fridge and I forgot to save YEP you just following my foodsteps i was juat here like minutes ago :D i Go to teleport its the fastest way loot hahaha Not talk to but trigger a cut scene so they are immediately hostile @cohhcarnage long way is there a bag of holding in this game? cmon stop taking the obvious bait y'all. how long have we had the internet now hidden area Poggies @PSfanatic It's Fortnite not Fortnight. It's my name dumbass Aren’t eh. Loot! Chat fight? TPFufun PopCorn PogChamp loot!!! Chat: I can't believe CohhCarnage didn't introduce himself, what a tresspasser enemy. That guy had only 6 hp left even after being hit multiple times, lol. The gnome ran away because he was a prisoner. Oh look, pots!",
+			},
+		},
+	}
+
+}
+
 func (chat *chat) summarizeChat(client *openai.Client) (summary string, err error) {
-	messages := ""
-  L:
+
+	messages := new(bytes.Buffer)
+
+  req := newChatCompletionRequest()
+  ctx := context.Background()
+
+L:
 	for {
 		select {
 		case m := <-chat.ch:
-			messages = messages + "messages: " + m.Message + "\n"
+      _, err := messages.WriteString(m.Message + "\n")
+      if err != nil {
+        return "", err
+      }
 		default:
-      break L
+			break L
 		}
 	}
 
-	// req := openai.CompletionRequest{
-	// 	Model:       openai.GPT3TextDavinci003,
-	// 	Prompt:      messages,
-	// 	MaxTokens:   50,
-	// 	Temperature: 0,
-	// }
+  req.Messages = append(req.Messages, openai.ChatCompletionMessage{
+    Role: openai.ChatMessageRoleUser,
+    Content: messages.String(),
+  })
 
-	// resp, err := client.CreateCompletion(context.Background(), req)
-	// if err != nil {
-	//   return "", err
-	// }
+	resp, err := client.CreateChatCompletion(ctx, req)
+	if err != nil {
+		return "", err
+	}
 
-	// return resp.Choices[0].Text, nil
-	return messages, nil
-
+	return resp.Choices[0].Message.Content, nil
 }
 
 func main() {
@@ -92,7 +111,7 @@ func main() {
 
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	setupClient(twitchClient, &chat)
+	setupTwitchClient(twitchClient, &chat)
 	defer func() {
 		ticker.Stop()
 		twitchClient.Disconnect()
@@ -110,7 +129,7 @@ func main() {
 	go func() {
 		for range ticker.C {
 			l := len(chat.ch)
-			if l <= 20 {
+			if l <= CHAT_HISTORY_LENGTH / 4 {
 				fmt.Printf("length of chat: %v \n", l)
 				continue
 			}
